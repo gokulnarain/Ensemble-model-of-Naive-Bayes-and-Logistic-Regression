@@ -1,0 +1,1084 @@
+---
+title: "DA_5030_Practicum_2"
+author: "Gokul Narain Natarajan"
+date: "11/10/2020"
+output:
+  pdf_document: default
+  '': default
+---
+
+# **DA 5030 - Practicum 2**
+
+# **Problem 1**
+
+## Q1: Download the data set Census Income Data for Adults along with its explanation (Links to an external site.). There are two data sets (adult.data and adult.test). Note that the data file does not contain header names; you may wish to add those. The description of each column can be found in the data set explanation. Combine the two data sets into a single data set.
+
+```{r}
+
+# Importing datasets:
+ds1 <- read.csv("C:/Users/Lenovo/Desktop/Practicum 2/adult.data", header = FALSE)
+ds2 <- read.csv("C:/Users/Lenovo/Desktop/Practicum 2/adult.test", header = FALSE)
+
+# Removing the junk row
+ds2 <- ds2[c(-1),]
+
+# Assigning column names 
+colnames(ds1) <- c("Age", "Workclass","Final_weight","Education","Education_num","Marital_status","occupation","Relationship","Race","Sex","Capital_gain","Capital_loss","Hours_per_week","Native_country","Label(WRT50K)")
+colnames(ds2) <- c("Age", "Workclass","Final_weight","Education","Education_num","Marital_status","occupation","Relationship","Race","Sex","Capital_gain","Capital_loss","Hours_per_week","Native_country","Label(WRT50K)")
+
+ds1 <- data.frame(ds1)
+ds2 <- data.frame(ds2)
+
+# nrow(ds1)
+# nrow(ds2)
+
+# Combining the 2 datasets
+ds <- rbind(ds1,ds2)
+head(ds)
+
+# table(ds1$Education,ds1$Education_num)
+
+```
+
+## Q2: Explore the combined data set as you see fit and that allows you to get a sense of the data and get comfortable with it.
+
+```{r}
+
+# Exploring the dataset:
+str(ds)
+summary(ds)
+# Upon exploring the data, the Education_num seems to be like a labeling of Education
+
+# To check if there is any missing values in the dataset
+length(ds[is.na(ds)])
+# There is no missing values in the dataset
+
+```
+
+## Q3: Split the combined data set 70/30% so you retain 30% for validation and tuning using random sampling with replacement. Use a fixed seed so you produce the same results each time you run the code. Going forward you will use the 70% data set for training and the 30% data set for validation and to determine accuracy
+
+```{r}
+
+# Splitting training and testing datasets
+set.seed(9677623)
+
+ds_count <- nrow(ds)
+ds_75 <- floor(0.70*ds_count)
+sample_train_ds <- sample(ds_count,ds_75,replace = TRUE)
+
+ds.training <- ds[sample_train_ds,]
+ds.testing <- ds[-sample_train_ds,]
+
+```
+
+
+## Q4: Using the Naive Bayes Classification algorithm from the KlaR package, build a binary classifier that predicts whether an individual earns more than or less than US$50,000. Only use the features age, education, workclass, sex, race, and native-country. Ignore any other features in your model. You need to transform continuous variables into categorical variables by binning (use equal size bins from min to max).
+
+```{r}
+#Installing klaR package
+if(!require(klaR))
+  {
+    install.packages("klaR")
+    library(klaR)
+}
+
+train_data_nb <- ds.training[c("Age","Education","Workclass","Sex","Race","Native_country","Label.WRT50K.")]
+
+# Changing the different values to unique values by removing junks
+library(data.table)
+setDT(train_data_nb)[Label.WRT50K.==" <=50K.", Label.WRT50K. := " <=50K"]
+setDT(train_data_nb)[Label.WRT50K.==" >50K.", Label.WRT50K. := " >50K"]
+
+train_data_nb$Label.WRT50K. <- as.factor(train_data_nb$Label.WRT50K.)
+train_data_nb <- data.frame(train_data_nb)
+train_data_nb$Age <- as.numeric(train_data_nb$Age)
+
+# Converting Age from numeric to categorical
+train_data_nb$Age <- cut(train_data_nb$Age,5,labels = c("Very young","Young","Middle Age","Old","Very Old"))
+# is.numeric(train_data_nb$Age)
+# is.factor(train_data_nb$Age)
+
+# Exploring the training dataset:
+str(train_data_nb)
+summary(train_data_nb)
+head(train_data_nb)
+
+# Apply the same procedures to testing data: 
+## I must of created a function here! for code re-usability
+
+test_data_nb <- ds.testing[c("Age","Education","Workclass","Sex","Race","Native_country","Label.WRT50K.")]
+
+# Changing the different values to unique values by removing junks
+setDT(test_data_nb)[Label.WRT50K.==" <=50K.", Label.WRT50K. := " <=50K"]
+setDT(test_data_nb)[Label.WRT50K.==" >50K.", Label.WRT50K. := " >50K"]
+test_data_nb$Label.WRT50K. <- as.factor(test_data_nb$Label.WRT50K.)
+
+test_data_nb <- as.data.frame(test_data_nb)
+
+test_data_nb$Age <- as.numeric(test_data_nb$Age)
+# Binning the age feature
+test_data_nb$Age <- cut(test_data_nb$Age,5,labels = c("Very young","Young","Middle Age","Old","Very Old"))
+
+# Exploring the test dataset
+head(test_data_nb)
+str(test_data_nb)
+summary(test_data_nb)
+# is.numeric(test_data_nb$Age)
+# is.factor(test_data_nb$Age)
+```
+
+```{r}
+
+# apply Naive Bayes
+nb_model_ds <- NaiveBayes(Label.WRT50K. ~., data=train_data_nb)
+
+```
+
+
+## Q5: Build a confusion matrix for the classifier from (4) and comment on it, e.g., explain what it means.
+
+```{r,warning=FALSE}
+
+# check the accuracy
+set.seed(90777)
+predict_ds <- predict(nb_model_ds, test_data_nb[,-7])
+# table(predict_ds$class, test_data_nb$Label.WRT50K.)
+# Note - I observed that the FP and FN are interchanged when I create the matrix from table function
+```
+
+
+```{r}
+#Compare the result using Crosstable function and calculating the results from
+  #- confusion matrix
+library(gmodels)
+CrossTable(test_data_nb$Label.WRT50K.,predict_ds$class,prop.chisq = FALSE,prop.c = FALSE,prop.r = FALSE,dnn = c("Predicted","Actual"))
+```
+### True Positive = 18166 - 74.8% of the prediction of <=50K is correctly predicted as =50K by the model
+### False Positive = 5053 - 20.8% of the prediction of <=50K is wrongly predicted as >50K by the model
+### True Negative = 748 - 3.1% of the the prediction of >50K is correctly predicted as >50K by the model
+### False Negative = 330 - 0.014 of the prediction of >50K is wrongly predicted as >50K by the model
+
+$Accuracy = ((TN+TP)/Total)*100$
+
+$Accuracy = (18914/24297)*100$
+
+$Accuracy = ((5053+18166)/24297)*100$
+
+$Accuracy = ((0.7785)*100$
+
+$Accuracy = 77.85\% \approx 78\%$
+
+
+## Q6: Create a full logistic regression model of the same features as in (4) (i.e., do not eliminate any features regardless of p-value). Be sure to either use dummy coding for categorical features or convert them to factor variables and ensure that the glm function does the dummy coding
+
+```{r}
+
+# Training Dataset
+train_data_nb <- ds.training
+
+# Checking if the feature has any junks or unique values
+table(train_data_nb$Label.WRT50K.)
+setDT(train_data_nb)[Label.WRT50K.==" <=50K.", Label.WRT50K. := " <=50K"]
+setDT(train_data_nb)[Label.WRT50K.==" >50K.", Label.WRT50K. := " >50K"]
+train_data_nb$Label.WRT50K. <- as.factor(train_data_nb$Label.WRT50K.)
+levels(train_data_nb$Label.WRT50K.)=0:1
+train_data_nb$Age <- as.numeric(train_data_nb$Age)
+
+# Converting all the categorical variable into factors
+train_data_nb$Education <- as.factor(train_data_nb$Education)
+train_data_nb$Workclass <- as.factor(train_data_nb$Workclass)
+train_data_nb$Sex <- as.factor(train_data_nb$Sex)
+train_data_nb$Race <- as.factor(train_data_nb$Race)
+train_data_nb$Native_country <- as.factor(train_data_nb$Native_country)
+
+# Building Logistic Regression model
+final_glm_lr_2 <- glm(formula = Label.WRT50K. ~ Age+Education+Workclass+Sex+Race+Native_country,data = train_data_nb, family = binomial())
+summary(final_glm_lr_2)
+
+# Test dataset
+test_data_nb <- ds.testing
+
+# Checking if the feature has any junks or unique values
+table(test_data_nb$Label.WRT50K.)
+
+# Converting all the categorical variable into factors
+test_data_nb$Label.WRT50K. <- as.factor(test_data_nb$Label.WRT50K.)
+levels(test_data_nb$Label.WRT50K.)=0:1
+test_data_nb$Age <- as.numeric(test_data_nb$Age)
+test_data_nb$Education <- as.factor(test_data_nb$Education)
+test_data_nb$Workclass <- as.factor(test_data_nb$Workclass)
+test_data_nb$Sex <- as.factor(test_data_nb$Sex)
+test_data_nb$Race <- as.factor(test_data_nb$Race)
+test_data_nb$Native_country <- as.factor(test_data_nb$Native_country)
+
+# Predicting the target variable using the model build above
+predict_lr_2 <- predict(final_glm_lr_2,test_data_nb[,-7])
+summary(predict_lr_2)
+```
+
+## Q7: Build a confusion matrix for the classifier from (5) and comment on it, e.g., explain what it means.
+
+```{r}
+
+set.seed(90777)
+
+#- confusion matrix
+t <- table(predict_lr_2>0.5, (test_data_nb$Label.WRT50K.))
+# Note - I observed that the FP and FN are interchanged when I create the matrix from table function
+# And it is not affecting my accuracy calculation
+
+#Compare the result using Crosstable function and calculating the results from
+  #- confusion matrix
+CrossTable(test_data_nb$Label.WRT50K., predict_lr_2>0.5,prop.chisq = FALSE,prop.c = FALSE,prop.r = FALSE,dnn = c("Predicted","Actual"))
+
+# Finding the accuracy
+acc <- sum(diag(t))/sum(t)*100
+
+predict_lr_2 <- as.data.frame(predict_lr_2)
+
+# Coverting the numeric values to target feature values
+for (i in 1:(nrow(predict_lr_2))) {
+
+  if(predict_lr_2[i,]<=0.5)
+  {
+    predict_lr_2[i,] <- " <=50K" 
+  }
+  else
+  {
+    predict_lr_2[i,] <- " >50K"
+  }
+}
+
+
+##############################################################################################################
+
+message("The accuracy percentage of the model is ", round(acc,2))
+
+```
+
+### True Positive = 18496  - 76.1% of the prediction of <=50K is correctly predicted as =50K by the model
+### False Positive = 5801  - 23.9% of the prediction of <=50K is wrongly predicted as >50K by the model
+### Calculated accuracy matches with the TP of the confusion matrix
+
+## Q8: Build a function called predictEarningsClass() that predicts whether an individual makes more or less than US$50,000 and that combines the two predictive models from (4) and (6) into a simple ensemble. If the two models disagree on a prediction, then the prediction should be the one from the model with the higher accuracy -- make sure you do not hard code that as the training data may change over time and the same model may not be the more accurate forever.
+
+```{r,warning=FALSE}
+
+  ds.training <- data.frame(ds.training)
+  ds.testing <- data.frame(ds.testing)
+  
+  
+# Creating a function for Naive Bayes model:
+nb <- function(tr,ts)
+{
+
+  #Installing klaR package
+if(!require(klaR))
+  {
+    install.packages("klaR")
+    library(klaR)
+  }
+  
+# Training dataset:
+train_data_nb <- tr[c("Age","Education","Workclass","Sex","Race","Native_country","Label.WRT50K.")]
+# library(data.table)
+setDT(train_data_nb)[Label.WRT50K.==" <=50K.", Label.WRT50K. := " <=50K"]
+setDT(train_data_nb)[Label.WRT50K.==" >50K.", Label.WRT50K. := " >50K"]
+
+train_data_nb$Label.WRT50K. <- as.factor(train_data_nb$Label.WRT50K.)
+train_data_nb <- as.data.frame(train_data_nb)
+train_data_nb$Age <- as.numeric(train_data_nb$Age)
+
+train_data_nb$Age <- cut(train_data_nb$Age,5,labels = c("Very young","Young","Middle Age","Old","Very Old"))
+
+# Testing dataset:
+test_data_nb <- ts[c("Age","Education","Workclass","Sex","Race","Native_country")]
+# setDT(test_data_nb)[Label.WRT50K.==" <=50K.", Label.WRT50K. := " <=50K"]
+# setDT(test_data_nb)[Label.WRT50K.==" >50K.", Label.WRT50K. := " >50K"]
+
+# test_data_nb$Label.WRT50K. <- as.factor(test_data_nb$Label.WRT50K.)
+test_data_nb <- as.data.frame(test_data_nb)
+test_data_nb$Age <- as.numeric(test_data_nb$Age)
+
+test_data_nb$Age <- cut(test_data_nb$Age,5,labels = c("Very young","Young","Middle Age","Old","Very Old"))
+
+# apply Naive Bayes
+nb_model_ds <- NaiveBayes(Label.WRT50K. ~., data=train_data_nb)
+
+predict_ds <- predict(nb_model_ds, test_data_nb[])
+
+return(as.data.frame(predict_ds$class))
+}
+
+# Calculating the accuracy of the Naive Bayes model:
+accr_nb <- function(tr,ts)
+{
+  test_data_nb <- ts[c("Age","Education","Workclass","Sex","Race","Native_country","Label.WRT50K.")]
+# setDT(test_data_nb)[Label.WRT50K.==" <=50K.", Label.WRT50K. := " <=50K"]
+# setDT(test_data_nb)[Label.WRT50K.==" >50K.", Label.WRT50K. := " >50K"]
+# table(test_data_nb$Label.WRT50K.)
+  nb(tr,ts)
+  
+  taab <- table(predict_ds$class, test_data_nb$Label.WRT50K.)
+  acc <- sum(diag(taab))/sum(taab)*100
+return(acc)
+}
+
+
+# Creating a function for Logistic regression model:
+lr <- function(tr,ts)
+{
+
+train_data_nb <- tr[c("Age","Education","Workclass","Sex","Race","Native_country","Label.WRT50K.")]
+library(data.table)
+setDT(train_data_nb)[Label.WRT50K.==" <=50K.", Label.WRT50K. := " <=50K"]
+setDT(train_data_nb)[Label.WRT50K.==" >50K.", Label.WRT50K. := " >50K"]
+
+test_data_nb <- ts[c("Age","Education","Workclass","Sex","Race","Native_country")]
+# setDT(test_data_nb)[Label.WRT50K.==" <=50K.", Label.WRT50K. := " <=50K"]
+# setDT(test_data_nb)[Label.WRT50K.==" >50K.", Label.WRT50K. := " >50K"]
+
+train_data_nb$Age <- as.numeric(train_data_nb$Age)
+train_data_nb$Label.WRT50K. <- as.factor(train_data_nb$Label.WRT50K.)
+levels(train_data_nb$Label.WRT50K.)=0:1
+train_data_nb$Education <- as.factor(train_data_nb$Education)
+train_data_nb$Workclass <- as.factor(train_data_nb$Workclass)
+train_data_nb$Sex <- as.factor(train_data_nb$Sex)
+train_data_nb$Race <- as.factor(train_data_nb$Race)
+train_data_nb$Native_country <- as.factor(train_data_nb$Native_country)
+
+final_glm_lr_2 <- glm(formula = Label.WRT50K. ~ Age+Education+Workclass+Sex+Race+Native_country,data = train_data_nb, family = binomial())
+
+test_data_nb$Age <- as.numeric(test_data_nb$Age)
+test_data_nb$Education <- as.factor(test_data_nb$Education)
+test_data_nb$Workclass <- as.factor(test_data_nb$Workclass)
+test_data_nb$Sex <- as.factor(test_data_nb$Sex)
+test_data_nb$Race <- as.factor(test_data_nb$Race)
+test_data_nb$Native_country <- as.factor(test_data_nb$Native_country)
+
+predict_lr_2 <- predict(final_glm_lr_2,test_data_nb[])
+predict_lr_2 <- as.data.frame(predict_lr_2)
+
+for (i in 1:(nrow(predict_lr_2))) {
+
+  if(predict_lr_2[i,]<0.5)
+  {
+    predict_lr_2[i,] <- " <=50K" 
+  }
+  else
+  {
+    predict_lr_2[i,] <- " >50K"
+  }
+  
+}
+return(predict_lr_2)
+
+}
+
+
+# Calculating the accuracy of the Logistic Regression model:
+accr_lr <- function(tr,ts)
+{
+  
+test_data_nb <- ts[c("Age","Education","Workclass","Sex","Race","Native_country","Label.WRT50K.")]
+
+predict_lr_2 <- lr(tr,ts)
+t <- table(predict_lr_2>0.5, test_data_nb$Label.WRT50K.)
+t
+acc <- sum(diag(t))/sum(t)*100
+return(acc)
+}
+
+
+# Creating a function for predicting the target that ensemble both NB and LR models:
+predictEarningsClass <- function(x,y)
+{
+  p1 <- nb(x,y)
+  p2 <- lr(x,y)
+  
+  {
+    if(p1==p2)
+    {
+      return(p1)
+    }
+    else if(p1!=p2)
+    {
+      a1 <- accr_lr(x,y)
+      a2 <- accr_nb(x,y)
+      comp <- a1>a2
+      if(comp==TRUE)
+        {
+        return(p2)
+        }  
+      else
+        {
+        return(p1)
+        }
+    }
+  }
+}
+
+## Testing the functions build 
+
+# predictEarningsClass(ds.training,ds.testing)
+# lr(ds.training,ds.testing)
+# nb(ds.training,ds.testing)
+# accr_lr(ds.training,ds.testing)
+# accr_nb(ds.training,ds.testing)
+
+```
+
+Q.9: Using the ensemble model from (8), predict whether a 47-year-old black female adult who is a local government worker with a a Bacherlor's degree who immigrated from Honduras earns more or less than US$50,000. 
+
+```{r}
+
+# Creating a dataset using the given values
+Age <- c(48)
+Education <- c(" Bachelors")
+Workclass <- c(" Local-gov")
+Sex <- c(" Female")
+Race <- c(" Black")
+Native_country <- c(" Honduras")
+Label.WRT50K. <- c(" >50K")  ## Assuming this value 
+
+test_input <- data.frame(Age,Education,Workclass,Sex,Race,Native_country,Label.WRT50K.)
+colnames(test_input) <- c("Age","Education","Workclass","Sex","Race","Native_country","Label.WRT50K.")
+
+Final_val <- predictEarningsClass(ds.training,test_input[-7])
+
+message("The earnings of the lady with the given conditions is ", Final_val$`predict_ds$class`)
+
+```
+
+```{r}
+qt(0.975,28)
+```
+
+# **Problem 2:**
+
+
+## Q1: Load and then explore this data set on car salesPreview the document into a dataframe called cars.df. Exclude name (manufacturer and model) from the data -- do not use in any of the modeling going forward.
+
+```{r}
+
+# Importing the dataset:
+cars.df <- read.csv("C:/Users/Lenovo/Desktop/Practicum 2/CarDataSet.csv")
+
+# Ignoring column 1 - names:
+cars.df <- cars.df[-1]
+head(cars.df,3)
+
+# Installing the caret package:
+if(!require(caret))
+  {
+    install.packages("caret")
+    library(caret)
+  }
+
+# Converting the categorical variable into contineous variable:
+dmyy <- dummyVars("~.",data = cars.df)
+ab <- cars.df
+ab <- data.frame(predict(dmyy,newdata = ab))
+l <- ab$year
+l <- as.numeric(l)
+m <- as.numeric(2020)
+is.numeric(m)
+m <- rep(m,nrow(ab))
+n <- m-l
+n <- data.frame(n)
+
+# Adding the difference in years (current - given) as new column - Age
+ab <- cbind(ab,n)
+names(ab)[names(ab)=="n"]<- "Age"
+
+# Dropping the column year
+ab <- ab[c(1,19,c(2:18))]
+ab <- ab[-1]
+cars.df <- ab
+head(cars.df)
+
+# Exploring the dataset
+str(cars.df)
+summary(cars.df)
+
+```
+
+
+## Q2: Are there outliers in any one of the features in the data set? How do you identify outliers? Remove them but create a second data set with outliers removed called cars.no.df. Keep the original data set cars.df.
+
+```{r}
+
+# To check if there is any missing values in the dataset
+length(cars.df[is.na(cars.df)])
+
+#Finding the outliers with z score validation with standard cut off value of 3
+#-----------------------------------
+
+sd_sp <- sd(cars.df$selling_price)
+m_sp <- mean(cars.df$selling_price)
+zs_sp <- ((cars.df$selling_price-m_sp)/sd_sp)
+table(zs_sp>3)
+out_sp <- which(zs_sp>3)
+
+#-----------------------------------
+
+sd_kmd <- sd(cars.df$km_driven)
+m_kmd <- mean(cars.df$km_driven)
+zs_kmd <- ((cars.df$km_driven-m_kmd)/sd_kmd)
+table(zs_kmd>3)
+out_kmd <- which(zs_kmd>3)
+
+#-----------------------------------
+
+sd_age <- sd(cars.df$Age)
+m_age <- mean(cars.df$Age)
+zs_age <- ((cars.df$Age-m_age)/sd_age)
+table(zs_age)
+out_age <- which(zs_age>3)
+
+#-----------------------------------
+
+## Since there is no common columns, following the below method to create the dataset
+cars.df_1 <- cars.df
+cars.df_1$selling_price[out_sp] <- NA 
+cars.df_1$km_driven[out_kmd] <-  NA
+cars.df_1$Age[out_age] <- NA
+
+length(cars.df[is.na(cars.df_1)])
+
+# Installing the dplyr package:
+if(!require(dplyr))
+  {
+    install.packages("dplyr")
+    library(dplyr)
+  }
+
+cars.no.df <- na.exclude(cars.df_1)
+
+# Exploring the new dataset
+str(cars.no.df)
+summary(cars.no.df)
+
+```
+
+
+## Q3: Using pairs.panel, what are the distributions of each of the features in the data set with outliers removed (cars.no.df)? Are they reasonably normal so you can apply a statistical learner such as regression? Can you normalize features through a log, inverse, or square-root transform? State which features should be transformed and then transform as needed and build a new data set, cars.tx.
+
+```{r}
+
+# Installing the psych package:
+if(!require(psych))
+  {
+    install.packages("psych")
+    library(psych)
+  }
+
+# Distribution of each feature
+pairs.panels(cars.no.df[c("Age","selling_price","km_driven")])
+
+## Ignored the Categorical variables - "fuelCNG","fuelDiesel","fuelElectric","fuelLPG","fuelPetrol","seller_typeDealer","seller_typeIndividual","seller_typeTrustmark.Dealer","ownerSecond.Owner","ownerTest.Drive.Car","ownerThird.Owner" 
+
+### Age and KM Driven are postively correlated and all other relations are negatively correlated
+### Age and selling price have slighly higher correlation value comparing to other features
+
+# Checking the normality
+
+# Histograms:
+hist(cars.no.df$selling_price)
+hist(cars.no.df$km_driven)
+hist(cars.no.df$Age)
+
+# Applying Sharipo test:
+shapiro.test(cars.no.df$selling_price)
+shapiro.test(cars.no.df$km_driven)
+shapiro.test(cars.no.df$Age)
+
+# Based on the histogram and the shapiro test, the p value is less than the alpha value of 0.05 so it deviated from normality
+
+# Try to replace log value for normality:
+shapiro.test(log(cars.no.df$selling_price))
+shapiro.test(log(cars.no.df$km_driven))
+shapiro.test(log(cars.no.df$Age))
+
+# Try to replace square root value for normality:
+shapiro.test(sqrt(cars.no.df$selling_price))
+shapiro.test(sqrt(cars.no.df$km_driven))
+shapiro.test(sqrt(cars.no.df$Age))
+
+# Try to replace inverse value for normality:
+i=1
+shapiro.test(i/(cars.no.df$selling_price))
+shapiro.test(i/(cars.no.df$km_driven))
+shapiro.test(i/(cars.no.df$Age))
+
+# for couple of Sharipo test with age column, the P value is NA so checked if it is Numeric:
+is.numeric(cars.no.df$Age)
+
+# Tested the normality by changing the features to its log form, square root value and inverse value
+# In all three forms, the features are still not normally distributed
+# However, for Km driven, there is a slight increase in p value for its square root value so continuing my model with that data as it is given in the question although it is not normally distributed
+
+# Replacing the columns km driven and selling price to sqrt of the values:
+bb <- cars.no.df
+bb$selling_price <- sqrt(bb$selling_price)
+bb$km_driven <- sqrt(bb$km_driven)
+bb$Age <- sqrt(bb$Age)
+cars.tx <- bb
+head(cars.tx)
+
+# Exploring the new dataset:
+str(cars.tx)
+summary(cars.tx)
+
+```
+
+
+## Q4:What are the correlations to the response variable (car sales price) for cars.no.df? Are there collinearities? Build a full correlation matrix.
+
+```{r}
+head(cars.no.df)
+cor(cars.no.df[c("Age","selling_price","km_driven")])
+
+## Ignored the categorical variables - "fuelCNG","fuelDiesel","fuelElectric","fuelLPG","fuelPetrol","seller_typeDealer","seller_typeIndividual","seller_typeTrustmark.Dealer","ownerSecond.Owner","ownerTest.Drive.Car","ownerThird.Owner" 
+
+#### There is no strong relationship between any of the variable with the SP
+#### Comparing the values, Age has slightly stronger negative correlation with SP
+#### KM_Driven has a very low negative correlation with SP
+```
+
+
+## Q5: Split the each of the three data sets, cars.no.df, cars.df, and cars.tx 75%/25% so you retain 25% for testing using random sampling without replacement. Call the data sets, cars.training and cars.testing, cars.no.training and cars.no.testing, and cars.tx.training and cars.tx.testing.
+
+```{r}
+
+set.seed(98348799)
+
+# Training and testing Dataset for dataset 1:
+cars_count <- nrow(cars.df)
+cars_75 <- floor(0.75*cars_count)
+sample_train <- sample(cars_count,cars_75,replace = FALSE)
+
+cars.training <- cars.df[sample_train,]
+cars.testing <- cars.df[-sample_train,]
+
+# Training and testing Dataset for dataset 1:
+cars_no_count <- nrow(cars.no.df)
+cars_no_75 <- floor(0.75*cars_no_count)
+sample_no_train <- sample(cars_no_count,cars_no_75,replace = FALSE)
+
+cars.no.training <- cars.no.df[sample_no_train,]
+cars.no.testing <- cars.no.df[-sample_no_train,]
+
+# Training and testing Dataset for dataset 1:
+cars_tx_count <- nrow(cars.tx)
+cars_tx_75 <- floor(0.75*cars_tx_count)
+sample_tx_train <- sample(cars_tx_count,cars_tx_75,replace = FALSE)
+
+cars.tx.training <- cars.tx[sample_tx_train,]
+cars.tx.testing <- cars.tx[-sample_tx_train,]
+
+```
+
+
+## Q6:  Build three full multiple regression models for predicting km_driven: one with cars.training, one with cars.no.training, and one with cars.tx.training, i.e., regression models that contains all features regardless of their p-values. Call the models reg.full, reg.no, and reg.tx
+
+```{r}
+
+# Regression models for all 3 training dataset:
+
+# Regression models for all training dataset 1:
+reg.full <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelElectric+fuelLPG+fuelPetrol+seller_typeDealer+seller_typeIndividual+seller_typeTrustmark.Dealer+transmissionAutomatic+transmissionManual+ownerFirst.Owner+ownerFourth...Above.Owner+ownerSecond.Owner+ownerTest.Drive.Car+ownerThird.Owner, data=cars.training)
+# Summary of regression model 1:
+summary(reg.full)
+
+# Regression models for all training dataset 2:
+reg.no <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelElectric+fuelLPG+fuelPetrol+seller_typeDealer+seller_typeIndividual+seller_typeTrustmark.Dealer+transmissionAutomatic+transmissionManual+ownerFirst.Owner+ownerFourth...Above.Owner+ownerSecond.Owner+ownerTest.Drive.Car+ownerThird.Owner, data=cars.no.training)
+# Summary of regression model 2:
+summary(reg.no)
+
+# Regression models for all training dataset 3:
+reg.tx <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelElectric+fuelLPG+fuelPetrol+seller_typeDealer+seller_typeIndividual+seller_typeTrustmark.Dealer+transmissionAutomatic+transmissionManual+ownerFirst.Owner+ownerFourth...Above.Owner+ownerSecond.Owner+ownerTest.Drive.Car+ownerThird.Owner, data=cars.tx.training)
+# Summary of regression model 3:
+summary(reg.tx)
+
+```
+
+
+## Q7: Build three ideal multiple regression models for cars.training, cars.no.training, and cars.tx.training using backward elimination based on p-value for predicting km_driven.
+
+```{r}
+
+## Applying backward elimination using P value for Model 1:
+
+# Ignoring the NA features
+cars.training_1 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelElectric+fuelLPG+seller_typeDealer+seller_typeIndividual+transmissionAutomatic+ownerFirst.Owner+ownerFourth...Above.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.training)
+# summary(cars.training_1)
+
+# Removing the feature highest P value:
+cars.training_2 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelElectric+fuelLPG+seller_typeDealer+seller_typeIndividual+transmissionAutomatic+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.training)
+# summary(cars.training_2)
+
+# Removing the feature highest P value:
+cars.training_3 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelElectric+fuelLPG+seller_typeDealer+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.training)
+# summary(cars.training_3)
+
+# Removing the feature highest P value:
+cars.training_4 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeDealer+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.training)
+# summary(cars.training_4)
+
+# Removing the feature highest P value:
+cars.training_5 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.training)
+summary(cars.training_5)
+
+
+## Applying backward elimination using P value for Model 2:
+
+# Ignoring the NA features:
+cars.no.training_1 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelElectric+fuelLPG+seller_typeDealer+seller_typeIndividual+transmissionAutomatic+ownerFirst.Owner+ownerFourth...Above.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.training)
+# summary(cars.no.training_1)
+
+# Removing the feature highest P value:
+cars.no.training_2 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelElectric+fuelLPG+seller_typeDealer+seller_typeIndividual+transmissionAutomatic+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.training)
+# summary(cars.no.training_2)
+
+# Removing the feature highest P value:
+cars.no.training_3 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelElectric+fuelLPG+seller_typeIndividual+transmissionAutomatic+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.training)
+# summary(cars.no.training_3)
+
+# Removing the feature highest P value:
+cars.no.training_4 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+transmissionAutomatic+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.training)
+# summary(cars.no.training_4)
+
+# Removing the feature highest P value:
+cars.no.training_5 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.training)
+summary(cars.no.training_5)
+
+## Applying backward elimination using P value for Model 3:
+
+# Ignoring the NA features:
+cars.tx.training_1 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeDealer+seller_typeIndividual+transmissionAutomatic+ownerFirst.Owner+ownerFourth...Above.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.tx.training)
+# summary(cars.tx.training_1)
+
+# Removing the feature highest P value:
+cars.tx.training_2 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeDealer+seller_typeIndividual+transmissionAutomatic+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.tx.training)
+# summary(cars.tx.training_2)
+
+# Removing the feature highest P value:
+cars.tx.training_3 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+transmissionAutomatic+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.tx.training)
+# summary(cars.tx.training_3)
+
+# Removing the feature highest P value:
+cars.tx.training_4 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.tx.training)
+summary(cars.tx.training_4)
+
+```
+
+
+## Q8: Provide an analysis of the six models (using their respective testing data sets), including Adjusted R-Squared and RMSE. Which of these models is the best? Why?
+
+```{r}
+
+#Installing the Metrics package
+if(!require(Metrics))
+  {
+    install.packages("Metrics")
+    library(Metrics)
+  }
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Model 1:
+
+cars.training_5 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.training)
+summary(cars.training_5)
+
+## RMSE of model 1:
+rmse_1 <- rmse(cars.training$km_driven, predict(cars.training_5,cars.training))
+message("The RMSE value of model 1 is ", round(rmse_1,4))
+# message("The Adjusted R square value of model 1 is ", cars.training_5$residuals)
+
+
+# Verification:
+# pred_1 <- predict(cars.training_5,cars.training)
+# diff_1 <- pred_1 - cars.training$km_driven
+# rrmms <- sqrt(mean(diff_1^2))
+# rrmms
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Model 2:
+
+cars.testing_1 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.testing)
+# summary(cars.testing_1)
+
+# Removing the feature highest P value:
+cars.testing_2 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerTest.Drive.Car, data=cars.testing)
+# summary(cars.testing_2)
+
+# Removing the feature highest P value:
+cars.testing_3 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+seller_typeIndividual+ownerFirst.Owner+ownerTest.Drive.Car, data=cars.testing)
+# summary(cars.testing_3)
+
+# Removing the feature highest P value:
+cars.testing_4 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+seller_typeIndividual+ownerFirst.Owner, data=cars.testing)
+# summary(cars.testing_4)
+
+# Removing the feature highest P value:
+cars.testing_5 <- lm(km_driven ~ Age+selling_price+fuelDiesel+seller_typeIndividual+ownerFirst.Owner, data=cars.testing)
+summary(cars.testing_5)
+
+## RMSE of model 2:
+rmse_2 <- rmse(cars.testing$km_driven, predict(cars.testing_5,cars.testing))
+message("The RMSE value of model 2 is ", round(rmse_2,4))
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Model 3:
+
+cars.no.training_5 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.training)
+summary(cars.no.training_5)
+
+## RMSE of model 3:
+rmse_3 <- rmse(cars.no.training$km_driven, predict(cars.no.training_5,cars.no.training))
+message("The RMSE value of model 3 is ", round(rmse_3,4))
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Model 4:
+
+cars.no.testing_1 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.testing)
+# summary(cars.no.testing_1)
+
+# Removing the feature highest P value:
+cars.no.testing_2 <- lm(km_driven ~ Age+selling_price+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.testing)
+summary(cars.no.testing_2)
+
+## RMSE of model 4:
+rmse_4 <- rmse(cars.no.testing$km_driven, predict(cars.no.testing_2,cars.no.testing))
+message("The RMSE value of model 4 is ", round(rmse_4,4))
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Model 5:
+
+cars.tx.training_4 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.tx.training)
+summary(cars.tx.training_4)
+
+## RMSE of model 5:
+rmse_5 <- rmse(cars.tx.training$km_driven, predict(cars.tx.training_4,cars.tx.training))
+message("The RMSE value of model 5 is ", round(rmse_5,4))
+
+#-------------------------------------------------------------------------------------------------------------------------------------------------
+
+# Model 6:
+
+cars.tx.testing_1 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.tx.testing)
+summary(cars.tx.testing_1)
+
+# Removing the feature highest P value:
+cars.tx.testing_2 <- lm(km_driven ~ Age+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.tx.testing)
+summary(cars.tx.testing_2)
+
+## RMSE of model 6:
+rmse_6 <- rmse(cars.tx.testing$km_driven, predict(cars.tx.testing_2,cars.tx.testing))
+message("The RMSE value of model 6 is ", round(rmse_6,4))
+
+## None of the model's R square is highly closer to 1 - the better the model fits the data is not so good for any of the models
+## Based on the R square values, The model 6 with cars.tx.testing dataset is more closer to 1 compare to other model
+
+## Based on the RMSE values, the Model 5 have the lowest RMSE and so it is a good model
+
+## Now it is between model 5 and 6:
+## Taking Residual standard error into account:
+
+## Model 5 - Residual standard error: 58.95
+## Model 6 - Residual standard error: 60.14
+
+#### Based on all 3 factors, Model 5 is good compare to other models
+
+```
+
+
+## Q9:  Using each of the regression models, what are the predicted odometer readings (km_driven) of a 2004 vehicle that was sold by a dealer for R87,000, has a Diesel engine, a manual transmission, and is second owner? Why are the predictions different?
+
+### *Given Values:*
+
+$Target variable = KM$
+
+$Year = 2004$
+
+#### Converting the year to age:
+
+$Age = 2020-2004 = 16$
+
+$Seller_Type = Dealer$
+
+$Selling_Price = R87,000$
+
+$Fuel = Diesel$
+
+$Transmission = Manual$
+
+$Owner = Second$
+
+### *Model 1 prediction:*
+
+$cars.training_5 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.training)$
+
+$KM_1 = 3.750e^{04}+3.671e^{03}*Age-8.472e^{-03}*SP+1.748e^{04}*fuelCNG+3.435e^{04}*fuelDiesel+2.531e^{04}*fuelLPG+7.915e^{03}*seller_typeIndividual-1.943e^{04}*ownerFirst.Owner-1.110e^{04}*ownerSecond.Owner-4.531e^{04}*ownerTest.Drive.Car$
+
+$KM_1 = 3.750*10^4  + 3.671*10^3 * Age - 8.472* 10^-3 * SP + 0 + 3.435*10^4* fuelDiesel + 0 + 0 - 0 - 1.110*10^4 * ownerSecond.Owner - 0$
+
+$KM_1 = 3.750*10000  + 3.671*1000 * Age - 8.472* (0.001) * SP + 0 + 3.435*10000* fuelDiesel + 0 + 0 - 0 - 1.110*10000 * ownerSecond.Owner - 0$
+
+$KM_1 = 37,500  + 3,671 * Age - 0.008472 * SP + 0 + 3,4350 * fuelDiesel + 0 + 0 - 0 - 11,100 * ownerSecond.Owner - 0$
+
+$KM_1 = 375,00  + 3,671 * 16 - 0.008472 * 87000 + 34,350 * 1 - 11,100 * 1$
+
+$KM_1 = 37,500  + 58,736 - 737.064 + 34,350 - 11,100$
+
+$KM_1 = 118,748.936$
+
+### *Model 2 prediction:*
+
+$cars.testing_5 <- lm(km_driven ~ Age+selling_price+fuelDiesel+seller_typeIndividual+ownerFirst.Owner, data=cars.testing)$
+
+$KM_2 = 1.977e+04 + 4.554e+03 * Age  -7.679e-03 * SP + 3.270e+04 * fuelDiesel + 9.467e+03 * seller_typeIndividual - 6.759e+03 * ownerFirst.Owner$
+
+$KM_2 = 1.977e+04 + 4.554e+03 * 16  -7.679e-03 * 87000 + 3.270e+04 * 1 + 9.467e+03 * 0 - 6.759e+03 * 0$
+
+$KM_2 = 1.977e+04 + 4.554e+03 * 16  -7.679e-03 * 87000 + 3.270e+04 * 1 + 9.467e+03 * 0 - 6.759e+03 * 0$
+
+$KM_2 = 1.977e+04 + 4.554e+03 * 16  -7.679e-03 * 87000 + 3.270e+04 * 1 + 9.467e+03 * 0 - 6.759e+03 * 0$
+
+$KM_2 = 1.977e+04 + 4.554e+03 * 16  -7.679e-03 * 87000 + 3.270e+04 * 1$
+
+$KM_2 = 1.977* 10^4 + 4.554*10^3 * 16  - 7.679*10^-3 * 87000 + 3.270*10^4 * 1$
+
+$KM_2 = 1.977* 10000 + 4.554*1000 * 16  - 7.679*1(0.001) * 87000 + 3.270*10000 * 1$
+
+$KM_2 = 19770 + 72,864  - 668.073  + 32,700$
+
+$KM_2 = 124,665.927$
+
+### *Model 3 prediction:*
+
+$cars.no.training_5 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.training)$
+
+$KM_3 = 2.957e+04 + 3.873e+03 * Age - 8.713e-03 * SP + 1.601e+04 * fuelCNG + 3.049e+04 * fuelDiesel + 1.919e+04 * fuelLPG + 9.583e+03 * seller_typeIndividual -1.348e+04 * ownerFirst.Owner -5.411e+03 * ownerSecond.Owner - 3.202e+04 * ownerTest.Drive.Car$
+
+$KM_3 = 2.957e+04 + 3.873e+03 * 16 - 8.713e-03 * 87000 + 1.601e+04 * 0 + 3.049e+04 * 1 + 1.919e+04 * 0 + 9.583e+03 * 0 -1.348e+04 * 0 -5.411e+03 * 1 - 3.202e+04 * 0$
+
+$KM_3 = 2.957*10^4 + 3.873*10^3 * 16 - 8.713*10^-3 * 87000  + 3.049*10^4 * 1  -5.411*10^3 * 1$ 
+
+$KM_3 = 2.957*10000 + 3.873*1000 * 16 - 8.713*0.001 * 87000  + 3.049*10000 * 1  -5.411*1000 * 1$
+
+$KM_3 = 29,570 + 61,968 - 758.031  + 30,490 - 5411$
+
+$KM_3 = 115,858.969$
+
+### *Model 4 prediction:*
+
+$cars.no.testing_2 <- lm(km_driven ~ Age+selling_price+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.no.testing)$
+
+$KM_4 = 4.385e+04 + 3.641e+03 * Age - 1.271e-02 * selling_price  + 3.061e+04 * fuelDiesel + 4.625e+04 * fuelLPG + 6.667e+03 * seller_typeIndividual - 2.321e+04 * ownerFirst.Owner -1.370e+04 * ownerSecond.Owner -3.915e+04 * ownerTest.Drive.Car$
+
+$KM_4 = 4.385*10000 + 3.641*1000 * 16 - 1.271*0.01 * 87000  + 3.061*10000 * fuelDiesel + 4.625e+04 * 0 + 6.667e+03 * 0 - 2.321e+04 * 0 -1.370*10000 * 1 -3.915e+04 * 0$
+
+$KM_4 = 4.385*10000 + 3.641*1000 * 16 - 1.271*0.01 * 87000  + 3.061*10000 * 1 -1.370*10000 * 1$
+
+$KM_4 = 43,850 + 58,256 - 1,105.77 + 30,610 - 13,700$
+
+$KM_4 = 117,910.23$
+
+### *Model 5 prediction:*
+
+$cars.tx.training_4 <- lm(km_driven ~ Age+selling_price+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.tx.training)$
+
+#### SP Value should be converted here:
+
+$SP= sqrt(87000)=294.96$
+
+$KM_5 = 105.734699 + 48.528614 * Age - 0.020946 * SP + 41.471282 * fuelCNG + 60.798133 * fuelDiesel + 48.628583 * fuelLPG + 19.490616 * seller_typeIndividual - 23.058526 * ownerFirst.Owner -11.065762 * ownerSecond.Owner - 87.113985 * ownerTest.Drive.Car$
+
+$KM_5 = 105.734699 + 48.528614 * 16 - 0.020946 * 294.96 + 41.471282 * 0 + 60.798133 * 1 + 48.628583 * 0 + 19.490616 * 0 - 23.058526 * 0 -11.065762 * 1 - 87.113985 * 0$
+
+$KM_5 = 105.734699 + 776.457824 - 6.178  + 60.798133  -11.065762$
+
+$KM_5 = 925.746894$  
+
+### *Model 6 prediction:*
+
+$cars.tx.testing_2 <- lm(km_driven ~ Age+fuelCNG+fuelDiesel+fuelLPG+seller_typeIndividual+ownerFirst.Owner+ownerSecond.Owner+ownerTest.Drive.Car, data=cars.tx.testing)$
+
+#### SP Value should be converted here, however, it is not used in the final formula:
+
+$SP= sqrt(87000)=294.96$
+
+$KM_6 = 92.214 + 52.542 * Age + 38.010 * fuelCNG +  56.083 * fuelDiesel + 52.456 * fuelLPG +  18.432 * seller_typeIndividual - 30.962 * ownerFirst.Owner - 15.689 * ownerSecond.Owner - 70.275 * ownerTest.Drive.Car$
+
+$KM_6 = 92.214 + 52.542 * 16 + 38.010 * 0 +  56.083 * 1 + 52.456 * 0 + 18.432 * 0 - 30.962 * 0 - 15.689 * 1 - 70.275 * 0$
+
+$KM_6 = 92.214 + 840.672 +  56.083  - 15.689$
+
+$KM_6 = 973.28$
+
+### There is a difference in prediction because not all features are included in every model and also, some features are normalized and so have different range. Lastly, the intercept of constant and each feature are different and it is generated by the model from the above question.
+
+
+## Q10: For each of the predictions, calculate the 95% prediction interval for the kilometers driven.
+
+```{r}
+
+# Predicted KM Driven for each of the 6 model
+KM_1 = 118748.936
+KM_2 = 124665.927
+KM_3 = 115858.969
+KM_4 = 117910.23
+KM_5 = 925.746894  
+KM_6 = 973.28 
+
+# CI for Model 1:
+M1_tail_1 <- KM_1 - 1.96*37130
+M1_tail_2 <- KM_1 + 1.96*37130
+# Residual standard error: 37130 on 3245 degrees of freedom
+
+message("The 95% prediction interval for model 1 is ", round(M1_tail_1,4), " and ", round(M1_tail_2,4))
+
+# CI for Model 2:
+M2_tail_1 <- KM_2 - 1.96*41770
+M2_tail_2 <- KM_2 + 1.96*41770
+# Residual standard error: 41770 on 1079 degrees of freedom
+
+message("The 95% prediction interval for model 2 is ", round(M2_tail_1,4), " and ", round(M2_tail_2,4))
+
+# CI for Model 3:
+M3_tail_1 <- KM_3 - 1.96*29990
+M3_tail_2 <- KM_3 + 1.96*29990
+# Residual standard error: 29990 on 3104 degrees of freedom
+
+message("The 95% prediction interval for model 3 is ", round(M3_tail_1,4), " and ", round(M3_tail_2,4))
+
+# CI for Model 4:
+M4_tail_1 <- KM_4 - 1.96*30010
+M4_tail_2 <- KM_4 + 1.96*30010
+# Residual standard error: 30010 on 1029 degrees of freedom
+
+message("The 95% prediction interval for model 4 is ", round(M4_tail_1,4), " and ", round(M4_tail_2,4))
+
+# CI for Model 5:
+M5_tail_1 <- KM_5 - 1.96*58.95
+M5_tail_2 <- KM_5 + 1.96*58.95
+# Residual standard error: 58.95 on 3104 degrees of freedom
+
+message("The 95% prediction interval for model 5 is ", round(M5_tail_1,4), " and ", round(M5_tail_2,4))
+
+# CI for Model 6:
+M6_tail_1 <- KM_6 - 1.96*60.14
+M6_tail_2 <- KM_6 + 1.96*60.14
+# Residual standard error: 60.14 on 1029 degrees of freedom
+
+message("The 95% prediction interval for model 6 is ", round(M6_tail_1,4), " and ", round(M6_tail_2,4))
+
+```
+
